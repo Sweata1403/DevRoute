@@ -1,0 +1,30 @@
+# Node.js — never commit dependencies, always reinstall from package.json
+node_modules/
+npm-debug.log*
+
+# Environment files — contain passwords and secrets, NEVER commit these
+.env
+.env.local
+.env.*.local
+
+# Terraform — generated files, not source files
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Ansible — generated files and vault secrets
+*.retry
+ansible/group_vars/all/vault.yml
+
+# Test output
+coverage/
+junit.xml
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Secrets (absolute rule — these go in a password manager, not Git)
+*.pem
+*.key
