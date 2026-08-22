@@ -1,0 +1,7 @@
+# Copy this to terraform.tfvars and fill in real values
+# terraform.tfvars is in .gitignore — NEVER commit real passwords
+
+environment = "dev"
+aws_region  = "us-east-1"
+image_tag   = "latest"
+db_password = "CHANGE_ME_use_a_strong_password"
