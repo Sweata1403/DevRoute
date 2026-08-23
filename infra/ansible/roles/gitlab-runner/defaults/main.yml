@@ -1,0 +1,10 @@
+gitlab_runner_version: "16.9.0"
+gitlab_url: "https://gitlab.com"
+gitlab_registration_token: "{{ lookup('env', 'GITLAB_RUNNER_TOKEN') }}"
+runner_name: "devroute-runner"
+runner_executor: docker
+runner_docker_image: "alpine:latest"
+runner_tags:
+  - devroute
+  - docker
+  - aws

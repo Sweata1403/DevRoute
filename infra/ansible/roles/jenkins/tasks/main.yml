@@ -1,0 +1,57 @@
+---
+- name: Install Java (required for Jenkins agent)
+  apt:
+    name: "{{ java_package }}"
+    state: present
+    update_cache: yes
+
+- name: Create Jenkins agent user
+  user:
+    name: "{{ jenkins_agent_user }}"
+    home: "{{ jenkins_agent_home }}"
+    shell: /bin/bash
+    create_home: yes
+    state: present
+
+- name: Add Jenkins user to docker group
+  user:
+    name: "{{ jenkins_agent_user }}"
+    groups: docker
+    append: yes
+
+- name: Create agent workspace directory
+  file:
+    path: "{{ jenkins_agent_workdir }}"
+    state: directory
+    owner: "{{ jenkins_agent_user }}"
+    group: "{{ jenkins_agent_user }}"
+    mode: "0755"
+
+- name: Download Jenkins agent JAR
+  get_url:
+    url: "{{ jenkins_controller_url }}/jnlpJars/agent.jar"
+    dest: "{{ jenkins_agent_home }}/agent.jar"
+    owner: "{{ jenkins_agent_user }}"
+    mode: "0644"
+
+- name: Deploy Jenkins agent systemd service
+  template:
+    src: jenkins-agent.service.j2
+    dest: /etc/systemd/system/jenkins-agent.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart jenkins-agent
+
+- name: Enable and start Jenkins agent
+  systemd:
+    name: jenkins-agent
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Allow Jenkins agent port through firewall
+  ufw:
+    rule: allow
+    port: "50000"
+    proto: tcp

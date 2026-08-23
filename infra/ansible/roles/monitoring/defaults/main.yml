@@ -1,0 +1,2 @@
+node_exporter_port: 9100
+node_exporter_user: node_exporter

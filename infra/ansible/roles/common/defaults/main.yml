@@ -1,0 +1,15 @@
+# Default values — override in group_vars or playbook vars
+common_packages:
+  - curl
+  - wget
+  - git
+  - unzip
+  - htop
+  - vim
+  - ca-certificates
+  - gnupg
+
+deploy_user_shell: /bin/bash
+docker_users:
+  - "{{ deploy_user }}"
+  - ec2-user

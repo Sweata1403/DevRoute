@@ -1,0 +1,14 @@
+# Common variables applied to every server in the inventory
+
+app_name: devroute
+deploy_user: devroute
+docker_compose_version: "2.24.0"
+node_exporter_version: "1.7.0"
+
+# Docker config
+docker_daemon_config:
+  log-driver: "json-file"
+  log-opts:
+    max-size: "10m"
+    max-file: "3"
+  live-restore: true

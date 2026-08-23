@@ -1,0 +1,6 @@
+---
+- name: Configure GitLab runners
+  hosts: gitlab_runners
+  roles:
+    - common
+    - gitlab-runner

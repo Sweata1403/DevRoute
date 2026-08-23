@@ -1,0 +1,50 @@
+---
+- name: Add GitLab runner GPG key
+  apt_key:
+    url: https://packages.gitlab.com/runner/gitlab-runner/gpgkey
+    state: present
+
+- name: Add GitLab runner repository
+  apt_repository:
+    repo: "deb https://packages.gitlab.com/runner/gitlab-runner/ubuntu/ {{ ansible_distribution_release }} main"
+    state: present
+
+- name: Install GitLab runner
+  apt:
+    name: "gitlab-runner={{ gitlab_runner_version }}"
+    state: present
+    update_cache: yes
+
+- name: Add gitlab-runner user to docker group
+  user:
+    name: gitlab-runner
+    groups: docker
+    append: yes
+
+- name: Register GitLab runner
+  command: >
+    gitlab-runner register
+    --non-interactive
+    --url "{{ gitlab_url }}"
+    --registration-token "{{ gitlab_registration_token }}"
+    --name "{{ runner_name }}"
+    --executor "{{ runner_executor }}"
+    --docker-image "{{ runner_docker_image }}"
+    --tag-list "{{ runner_tags | join(',') }}"
+    --docker-volumes /var/run/docker.sock:/var/run/docker.sock
+  args:
+    creates: /etc/gitlab-runner/config.toml
+
+- name: Deploy runner config template
+  template:
+    src: config.toml.j2
+    dest: /etc/gitlab-runner/config.toml
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Enable and start GitLab runner
+  systemd:
+    name: gitlab-runner
+    enabled: yes
+    state: started

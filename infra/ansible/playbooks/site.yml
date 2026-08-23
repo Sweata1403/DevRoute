@@ -1,0 +1,16 @@
+---
+- name: Apply common configuration to all servers
+  hosts: all
+  roles:
+    - common
+    - monitoring
+
+- name: Configure Jenkins agent
+  hosts: jenkins
+  roles:
+    - jenkins
+
+- name: Configure GitLab runners
+  hosts: gitlab_runners
+  roles:
+    - gitlab-runner

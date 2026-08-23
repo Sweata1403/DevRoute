@@ -1,0 +1,7 @@
+jenkins_agent_user: jenkins
+jenkins_agent_home: /home/jenkins
+jenkins_agent_workdir: /home/jenkins/workspace
+jenkins_controller_url: "{{ lookup('env', 'JENKINS_CONTROLLER_URL') }}"
+jenkins_agent_secret: "{{ lookup('env', 'JENKINS_AGENT_SECRET') }}"
+jenkins_agent_name: "devroute-agent"
+java_package: openjdk-17-jdk

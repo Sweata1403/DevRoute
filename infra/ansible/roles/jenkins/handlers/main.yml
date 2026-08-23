@@ -1,0 +1,5 @@
+---
+- name: restart jenkins-agent
+  systemd:
+    name: jenkins-agent
+    state: restarted

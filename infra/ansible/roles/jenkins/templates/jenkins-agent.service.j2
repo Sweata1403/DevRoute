@@ -1,0 +1,21 @@
+[Unit]
+Description=Jenkins Agent
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User={{ jenkins_agent_user }}
+WorkingDirectory={{ jenkins_agent_home }}
+ExecStart=/usr/bin/java -jar {{ jenkins_agent_home }}/agent.jar \
+  -url {{ jenkins_controller_url }} \
+  -secret {{ jenkins_agent_secret }} \
+  -name {{ jenkins_agent_name }} \
+  -workDir {{ jenkins_agent_workdir }}
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
