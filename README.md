@@ -41,32 +41,41 @@ Most DevOps tutorials teach tools in isolation. This project treats them as they
 
 ## 🏗️ Architecture
 
-Developer → GitHub PR
-│
-▼
-┌───────────────┐
-│ GitHub Actions │ ← Lint + Unit Tests + SAST
-└───────┬───────┘
-│ Merge to main
-▼
-┌───────────────┐
-│ GitLab CI │ ← Docker Build + Trivy Scan + ECR Push
-└───────┬───────┘
-│ Image tag passed downstream
-▼
-┌───────────────┐
-│ Jenkins │ ← Deploy Dev → [Approve] → Staging → [Approve] → Prod
-└───────┬───────┘
-│
-▼
-┌───────────────────────────────────────────┐
-│ AWS │
-│ ALB → ECS Fargate → RDS PostgreSQL │
-│ ↕ │
-│ Redis Cache │
-│ ↕ │
-│ Prometheus → Grafana → Alertmanager │
-└───────────────────────────────────────────┘
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        DEVELOPER                            │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ opens Pull Request
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   GITHUB ACTIONS                            │
+│         Lint  →  Unit Tests  →  SAST Scan                   │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ merge to main
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    GITLAB CI                                │
+│       Docker Build  →  Trivy Scan  →  Push to ECR          │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ image tag
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     JENKINS                                 │
+│   Deploy Dev → [Approve] → Staging → [Approve] → Prod       │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│                       AWS                                   │
+│                                                             │
+│   Internet → ALB → ECS Fargate (Node.js API)                │
+│                         │            │                      │
+│                     PostgreSQL     Redis                    │
+│                       (RDS)        (Cache)                  │
+│                                                             │
+│   Prometheus → Grafana → Alertmanager → PagerDuty / Slack   │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -113,51 +122,44 @@ Developer → GitHub PR
 
 ## 📁 Project Structure
 
+```
 DevRoute/
 ├── services/
-│ └── api/ # Node.js application
-│ ├── src/
-│ │ ├── db/ # PostgreSQL connection pool + migrations
-│ │ ├── cache/ # Redis client with graceful degradation
-│ │ ├── models/ # Business logic (links, clicks, analytics)
-│ │ ├── routes/ # Express route handlers
-│ │ ├── middleware/ # Rate limiting, request logging
-│ │ └── app.js # Express app factory
-│ └── Dockerfile # Multi-stage build (deps → production)
+│   └── api/                        # Node.js Express application
+│       ├── src/
+│       │   ├── db/                 # PostgreSQL pool + migrations
+│       │   ├── cache/              # Redis client (graceful degradation)
+│       │   ├── models/             # Links, clicks, analytics logic
+│       │   ├── routes/             # REST API endpoints
+│       │   └── middleware/         # Rate limiting, request logging
+│       └── Dockerfile              # Multi-stage build
 │
 ├── infra/
-│ ├── terraform/
-│ │ ├── modules/ # Reusable modules: vpc, ecr, rds, ecs
-│ │ └── environments/
-│ │ └── dev/ # Dev environment wiring all modules together
-│ └── ansible/
-│ ├── roles/
-│ │ ├── common/ # Docker, deploy user, UFW firewall
-│ │ ├── jenkins/ # Jenkins agent + systemd service
-│ │ ├── gitlab-runner/ # GitLab runner registration
-│ │ └── monitoring/ # Prometheus Node Exporter
-│ └── playbooks/
-│ └── site.yml # Master playbook
+│   ├── terraform/
+│   │   ├── modules/                # Reusable: vpc, ecr, rds, ecs
+│   │   └── environments/dev/       # Dev environment config
+│   └── ansible/
+│       ├── roles/
+│       │   ├── common/             # Docker, deploy user, firewall
+│       │   ├── jenkins/            # Jenkins agent + systemd
+│       │   ├── gitlab-runner/      # GitLab runner registration
+│       │   └── monitoring/         # Prometheus Node Exporter
+│       └── playbooks/site.yml      # Master playbook
 │
 ├── ci-cd/
-│ ├── jenkins/
-│ │ └── Jenkinsfile # Dev → Staging → Prod deployment pipeline
-│ └── gitlab/
+│   └── jenkins/Jenkinsfile         # Deploy pipeline with approvals
 │
 ├── monitoring/
-│ ├── prometheus/
-│ │ └── alert_rules.yml # APIDown, HighErrorRate, HighLatency, LowCacheHitRate
-│ ├── grafana/
-│ │ └── dashboards/ # Pre-provisioned Grafana dashboards
-│ └── alertmanager/
-│ └── alertmanager.yml # PagerDuty + Slack routing
+│   ├── prometheus/alert_rules.yml  # APIDown, HighErrorRate, HighLatency
+│   ├── grafana/dashboards/         # Pre-provisioned dashboards
+│   └── alertmanager/               # PagerDuty + Slack routing
 │
-├── .github/
-│ └── workflows/
-│ ├── pr-validation.yml # Lint + tests + SAST on every PR
-│ └── dependency-check.yml # Weekly npm audit
+├── .github/workflows/
+│   ├── pr-validation.yml           # Lint + tests + SAST on every PR
+│   └── dependency-check.yml        # Weekly npm audit
 │
-└── .gitlab-ci.yml # Build + scan + ECR push pipeline
+└── .gitlab-ci.yml                  # Build + Trivy scan + ECR push
+```
 
 ---
 
@@ -272,3 +274,4 @@ Alerts route to **PagerDuty** for critical issues (API down) and **Slack** for w
 <div align="center">
 <i>Built to demonstrate production DevOps practices — not just to make short links.</i>
 </div>
+
