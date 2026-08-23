@@ -18,7 +18,7 @@ _A fully automated, cloud-native application demonstrating end-to-end DevOps eng
 
 ## 📌 What is DevRoute?
 
-DevRoute is a URL shortener and click analytics API — similar to Bitly — where users create short links, share them, and track how many times they were clicked, from which locations, and on which devices.
+DevRoute is a URL shortener and click analytics API similar to Bitly where users create short links, share them, and track how many times they were clicked, from which locations, and on which devices.
 
 The application itself is intentionally simple. The engineering challenge is everything around it: automated quality gates, immutable Docker image builds, infrastructure-as-code, configuration management, and production-grade observability — all wired together into a single delivery pipeline that takes code from a developer's laptop to a live AWS environment with zero manual steps.
 
