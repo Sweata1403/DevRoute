@@ -1,0 +1,150 @@
+pipeline {
+    agent {
+        label 'devroute-agent'
+    }
+
+    environment {
+        AWS_REGION      = 'us-east-1'
+        ECR_REGISTRY    = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        IMAGE_NAME      = 'devroute-api'
+        ECS_CLUSTER     = 'devroute'
+        ECS_SERVICE     = 'devroute-api'
+    }
+
+    parameters {
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag to deploy')
+    }
+
+    stages {
+
+        stage('Verify Image') {
+            steps {
+                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
+                    sh """
+                        aws ecr describe-images \
+                            --repository-name ${IMAGE_NAME} \
+                            --image-ids imageTag=${params.IMAGE_TAG} \
+                            --region ${AWS_REGION}
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to Dev') {
+            steps {
+                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
+                    sh """
+                        aws ecs update-service \
+                            --cluster ${ECS_CLUSTER}-dev \
+                            --service ${ECS_SERVICE} \
+                            --force-new-deployment \
+                            --region ${AWS_REGION}
+
+                        aws ecs wait services-stable \
+                            --cluster ${ECS_CLUSTER}-dev \
+                            --services ${ECS_SERVICE} \
+                            --region ${AWS_REGION}
+                    """
+                }
+            }
+            post {
+                failure {
+                    sh """
+                        aws ecs update-service \
+                            --cluster ${ECS_CLUSTER}-dev \
+                            --service ${ECS_SERVICE} \
+                            --task-definition ${ECS_SERVICE}:PREVIOUS \
+                            --region ${AWS_REGION}
+                    """
+                }
+            }
+        }
+
+        stage('Smoke Test Dev') {
+            steps {
+                sh """
+                    sleep 15
+                    curl -f http://${DEV_ALB_URL}/health || exit 1
+                """
+            }
+        }
+
+        stage('Approve Staging') {
+            steps {
+                timeout(time: 24, unit: 'HOURS') {
+                    input message: "Deploy ${params.IMAGE_TAG} to Staging?",
+                          ok: 'Deploy',
+                          submitter: 'platform-team'
+                }
+            }
+        }
+
+        stage('Deploy to Staging') {
+            steps {
+                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
+                    sh """
+                        aws ecs update-service \
+                            --cluster ${ECS_CLUSTER}-staging \
+                            --service ${ECS_SERVICE} \
+                            --force-new-deployment \
+                            --region ${AWS_REGION}
+
+                        aws ecs wait services-stable \
+                            --cluster ${ECS_CLUSTER}-staging \
+                            --services ${ECS_SERVICE} \
+                            --region ${AWS_REGION}
+                    """
+                }
+            }
+        }
+
+        stage('Approve Production') {
+            steps {
+                timeout(time: 24, unit: 'HOURS') {
+                    input message: "Deploy ${params.IMAGE_TAG} to PRODUCTION?",
+                          ok: 'Deploy to Production',
+                          submitter: 'platform-team'
+                }
+            }
+        }
+
+        stage('Deploy to Production') {
+            steps {
+                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
+                    sh """
+                        aws ecs update-service \
+                            --cluster ${ECS_CLUSTER}-prod \
+                            --service ${ECS_SERVICE} \
+                            --force-new-deployment \
+                            --region ${AWS_REGION}
+
+                        aws ecs wait services-stable \
+                            --cluster ${ECS_CLUSTER}-prod \
+                            --services ${ECS_SERVICE} \
+                            --region ${AWS_REGION}
+                    """
+                }
+            }
+            post {
+                failure {
+                    sh """
+                        aws ecs update-service \
+                            --cluster ${ECS_CLUSTER}-prod \
+                            --service ${ECS_SERVICE} \
+                            --task-definition ${ECS_SERVICE}:PREVIOUS \
+                            --region ${AWS_REGION}
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployment of ${params.IMAGE_TAG} completed successfully across all environments."
+        }
+        failure {
+            echo "Pipeline failed. Check logs above for the failed stage."
+        }
+    }
+}
