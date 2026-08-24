@@ -1,0 +1,60 @@
+groups:
+  - name: devroute-api
+    interval: 30s
+    rules:
+      - alert: APIDown
+        expr: up{job="devroute-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "DevRoute API is down"
+          description: "Instance {{ $labels.instance }} unreachable for >1 minute."
+          runbook: "docs/runbooks.md#api-down"
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            rate(http_requests_total{job="devroute-api",status_code=~"5.."}[5m])
+            /
+            rate(http_requests_total{job="devroute-api"}[5m])
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High 5xx error rate on DevRoute API"
+          description: 'Error rate is {{ printf "%.1f" (mul $value 100) }}%.'
+          runbook: "docs/runbooks.md#high-error-rate"
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket{job="devroute-api"}[5m])
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High p95 latency on DevRoute API"
+          description: 'p95 latency is {{ printf "%.2f" $value }}s (threshold: 1s).'
+          runbook: "docs/runbooks.md#high-latency"
+
+      - alert: LowCacheHitRate
+        expr: |
+          (
+            rate(devroute_cache_hits_total[10m])
+            /
+            (rate(devroute_cache_hits_total[10m]) + rate(devroute_cache_misses_total[10m]))
+          ) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Cache hit rate dropped below 50%"
+          description: 'Cache hit rate is {{ printf "%.0f" (mul $value 100) }}%.'
+          runbook: "docs/runbooks.md#low-cache-hit-rate"
