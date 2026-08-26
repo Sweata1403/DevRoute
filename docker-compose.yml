@@ -11,6 +11,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3000
+      JWT_SECRET: devroute-local-secret-change-in-prod
       BASE_URL: http://localhost:3000
       POSTGRES_HOST: postgres # 'postgres' = the service name below, not localhost
       POSTGRES_PORT: 5432

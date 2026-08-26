@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { morganMiddleware, logger } = require('./middleware/requestLogger');
 const { readLimiter } = require('./middleware/rateLimiter');
 const linksRouter = require('./routes/links');
+const authRoutes = require('./routes/auth');
 const analyticsRouter = require('./routes/analytics');
 const { findByCode } = require('./models/link');
 const { getLink, setLink } = require('./cache/redis');
@@ -28,6 +29,7 @@ function createApp() {
   });
 
   // ── API routes ─────────────────────────────────────────────────
+  app.use('/api/auth', authRoutes);
   app.use('/api/links', linksRouter);
   app.use('/api/analytics', analyticsRouter);
 

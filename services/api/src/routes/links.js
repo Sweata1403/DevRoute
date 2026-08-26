@@ -1,103 +1,119 @@
 const express = require('express');
 const { isURL } = require('validator');
-const { createLink, findByCode, listLinks, deleteLink } = require('../models/link');
-const { getLink, setLink, deleteLink: deleteCached } = require('../cache/redis');
-const { writeLimiter } = require('../middleware/rateLimiter');
-const { logger } = require('../middleware/requestLogger');
+const {
+  createLink, findByCode, listLinks,
+  deleteLink, generateQRCode
+} = require('../models/link');
+const { getCache, setCache, deleteCache } = require('../cache/redis');
+const { requireAuth, optionalAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
-// ── POST /api/links — create a short link ──────────────────────
-router.post('/', writeLimiter, async (req, res) => {
-  const { url, alias, created_by: createdBy, expires_at: expiresAt } = req.body || {};
-
-  // Validation — check inputs before touching the DB
-  if (!url) {
-    return res.status(400).json({ error: 'url is required' });
-  }
-  if (!isURL(url, { require_protocol: true })) {
-    return res.status(400).json({ error: 'url must be a valid URL with http:// or https://' });
-  }
-  if (alias && !/^[a-zA-Z0-9_-]{2,16}$/.test(alias)) {
-    return res.status(400).json({ error: 'alias must be 2–16 characters, letters/numbers/hyphens only' });
-  }
-
+// POST /api/links - create a short link (auth required)
+router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const link = await createLink({ originalUrl: url, alias, createdBy, expiresAt });
-    await setLink(link.code, link); // warm the cache immediately after creation
+    const { url, alias, expiresAt, maxClicks } = req.body;
 
-    logger.info('Link created', { code: link.code });
+    if (!url || !isURL(url, { require_protocol: true })) {
+      return res.status(400).json({ error: 'A valid URL with protocol is required' });
+    }
 
-    return res.status(201).json({
-      code: link.code,
-      short_url: `${process.env.BASE_URL || 'http://localhost:3000'}/${link.code}`,
-      original_url: link.original_url,
-      created_at: link.created_at,
-      expires_at: link.expires_at
+    if (alias && !/^[a-zA-Z0-9_-]{3,50}$/.test(alias)) {
+      return res.status(400).json({
+        error: 'Alias must be 3-50 characters, letters, numbers, hyphens and underscores only'
+      });
+    }
+
+    if (expiresAt && isNaN(Date.parse(expiresAt))) {
+      return res.status(400).json({ error: 'expiresAt must be a valid date' });
+    }
+
+    if (maxClicks && (!Number.isInteger(maxClicks) || maxClicks < 1)) {
+      return res.status(400).json({ error: 'maxClicks must be a positive integer' });
+    }
+
+    const link = await createLink({
+      url,
+      alias,
+      userId: req.user.id,
+      expiresAt: expiresAt || null,
+      maxClicks: maxClicks || null
     });
+
+    res.status(201).json(link);
   } catch (err) {
-    if (err.status === 409) {
-      return res.status(409).json({ error: err.message });
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Alias already in use' });
     }
-    logger.error('Failed to create link', { error: err.message });
-    return res.status(500).json({ error: 'Internal server error' });
+    next(err);
   }
 });
 
-// ── GET /api/links — list all links ────────────────────────────
-router.get('/', async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
-
+// GET /api/links - list links (auth required, own links only)
+router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const result = await listLinks({ page, limit });
-    return res.json(result);
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+
+    const links = await listLinks({ userId: req.user.id, page, limit });
+    res.json({ links, page, limit });
   } catch (err) {
-    logger.error('Failed to list links', { error: err.message });
-    return res.status(500).json({ error: 'Internal server error' });
+    next(err);
   }
 });
 
-// ── GET /api/links/:code — get one link's metadata ─────────────
-router.get('/:code', async (req, res) => {
-  const { code } = req.params;
-
-  // Cache-first pattern: check Redis before hitting Postgres
-  let link = await getLink(code);
-  if (!link) {
-    link = await findByCode(code);
-    if (link) await setLink(code, link); // populate cache for next time
-  }
-
-  if (!link) {
-    return res.status(404).json({ error: 'Link not found' });
-  }
-
-  return res.json({
-    code: link.code,
-    short_url: `${process.env.BASE_URL || 'http://localhost:3000'}/${link.code}`,
-    original_url: link.original_url,
-    created_by: link.created_by,
-    created_at: link.created_at,
-    expires_at: link.expires_at
-  });
-});
-
-// ── DELETE /api/links/:code — soft delete ──────────────────────
-router.delete('/:code', writeLimiter, async (req, res) => {
-  const { code } = req.params;
-
+// GET /api/links/:code - get a single link
+router.get('/:code', optionalAuth, async (req, res, next) => {
   try {
-    const deleted = await deleteLink(code);
-    if (!deleted) {
-      return res.status(404).json({ error: 'Link not found' });
-    }
-    await deleteCached(code); // remove from cache too
-    logger.info('Link deleted', { code });
-    return res.status(204).send(); // 204 = success, no content to return
+    const { code } = req.params;
+
+    const cached = await getCache(code);
+    if (cached) return res.json(cached);
+
+    const link = await findByCode(code);
+    if (!link) return res.status(404).json({ error: 'Link not found' });
+
+    await setCache(code, link);
+    res.json(link);
   } catch (err) {
-    logger.error('Failed to delete link', { error: err.message });
-    return res.status(500).json({ error: 'Internal server error' });
+    next(err);
+  }
+});
+
+// GET /api/links/:code/qr - get QR code for a link
+router.get('/:code/qr', async (req, res, next) => {
+  try {
+    const { code } = req.params;
+
+    const link = await findByCode(code);
+    if (!link) return res.status(404).json({ error: 'Link not found' });
+
+    const qrDataUrl = await generateQRCode(code);
+
+    // Strip the data:image/png;base64, prefix and send as PNG
+    const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '');
+    const imgBuffer = Buffer.from(base64Data, 'base64');
+
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.send(imgBuffer);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/links/:code - soft delete (auth required, own links only)
+router.delete('/:code', requireAuth, async (req, res, next) => {
+  try {
+    const { code } = req.params;
+
+    const deleted = await deleteLink(code, req.user.id);
+    if (!deleted) return res.status(404).json({ error: 'Link not found or not yours' });
+
+    await deleteCache(code);
+    res.status(204).send();
+  } catch (err) {
+    next(err);
   }
 });
 

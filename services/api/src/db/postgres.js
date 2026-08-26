@@ -32,49 +32,43 @@ async function query(text, params) {
 // Creates our tables on first startup
 // Uses CREATE TABLE IF NOT EXISTS — safe to run multiple times
 async function runMigrations() {
-  const client = await getPool().connect();
-  try {
-    await client.query('BEGIN'); // start a transaction
+  await query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id          SERIAL PRIMARY KEY,
+      email       VARCHAR(255) UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at  TIMESTAMP DEFAULT NOW()
+    )
+  `);
 
-    // links table — stores the short codes and their target URLs
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS links (
-        id           SERIAL PRIMARY KEY,
-        code         VARCHAR(16) UNIQUE NOT NULL,
-        original_url TEXT NOT NULL,
-        created_by   VARCHAR(255),
-        expires_at   TIMESTAMP,
-        created_at   TIMESTAMP DEFAULT NOW(),
-        active       BOOLEAN DEFAULT TRUE
-      )
-    `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS links (
+      id          SERIAL PRIMARY KEY,
+      code        VARCHAR(20) UNIQUE NOT NULL,
+      url         TEXT NOT NULL,
+      alias       VARCHAR(50) UNIQUE,
+      user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      expires_at  TIMESTAMP,
+      max_clicks  INTEGER,
+      active      BOOLEAN DEFAULT TRUE,
+      created_at  TIMESTAMP DEFAULT NOW()
+    )
+  `);
 
-    // clicks table — every redirect gets recorded here
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS clicks (
-        id         BIGSERIAL PRIMARY KEY,
-        link_id    INT REFERENCES links(id) ON DELETE CASCADE,
-        clicked_at TIMESTAMP DEFAULT NOW(),
-        ip_hash    VARCHAR(64),
-        user_agent TEXT,
-        referrer   TEXT,
-        country    VARCHAR(2)
-      )
-    `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS clicks (
+      id         SERIAL PRIMARY KEY,
+      link_id    INTEGER REFERENCES links(id) ON DELETE CASCADE,
+      clicked_at TIMESTAMP DEFAULT NOW(),
+      user_agent TEXT,
+      ip_address INET,
+      referer    TEXT
+    )
+  `);
 
-    // Index on code — speeds up the most common query (redirect lookup)
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_links_code ON links(code)
-    `);
-
-    await client.query('COMMIT'); // save all changes
-    console.log('[db] Migrations complete');
-  } catch (err) {
-    await client.query('ROLLBACK'); // undo if anything failed
-    throw err;
-  } finally {
-    client.release(); // return connection to pool
-  }
+  await query(`CREATE INDEX IF NOT EXISTS idx_links_code ON links(code)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_links_user_id ON links(user_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_clicks_link_id ON clicks(link_id)`);
 }
 
 async function closePool() {
