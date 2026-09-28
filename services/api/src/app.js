@@ -58,7 +58,7 @@ function createApp() {
     }
 
     // 4. Redirect — 302 means temporary redirect (browser won't cache it)
-    return res.redirect(302, link.original_url);
+    return res.redirect(302, link.url);
   });
 
   // ── 404 handler ────────────────────────────────────────────────
