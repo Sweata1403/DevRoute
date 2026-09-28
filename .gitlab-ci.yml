@@ -43,13 +43,11 @@ integration-test:
     POSTGRES_DB: devroute_test
     POSTGRES_USER: devroute
     POSTGRES_PASSWORD: testpassword
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
     NODE_ENV: test
-    DB_HOST: postgres
-    DB_PORT: "5432"
-    DB_NAME: devroute_test
-    DB_USER: devroute
-    DB_PASSWORD: testpassword
     REDIS_URL: redis://redis:6379
+    JWT_SECRET: test-secret-for-ci
   script:
     - cd services/api
     - npm ci
@@ -112,3 +110,4 @@ push-to-ecr:
     - job: build
       artifacts: true
     - job: trivy-scan
+
