@@ -73,7 +73,12 @@ async function runMigrations() {
   ALTER TABLE links
   ADD COLUMN IF NOT EXISTS health_status VARCHAR(20) DEFAULT 'unknown',
   ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMP
-`);
+ `);
+
+  await query(`
+  ALTER TABLE links
+  ADD COLUMN IF NOT EXISTS webhook_source JSONB
+ `);
 
   await query(`
   CREATE TABLE IF NOT EXISTS audit_logs (
@@ -88,6 +93,7 @@ async function runMigrations() {
   )
 `);
   
+  await query(`CREATE INDEX IF NOT EXISTS idx_links_webhook ON links((webhook_source IS NOT NULL))`);
   await query(`CREATE INDEX IF NOT EXISTS idx_links_health ON links(health_status)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_audit_user_id ON audit_logs(user_id)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_audit_link_id ON audit_logs(link_id)`);

@@ -1,5 +1,6 @@
 require('dotenv').config(); // load .env file first, before anything else
 
+const webhooksRouter = require('./routes/webhooks');
 const express = require('express');
 const helmet = require('helmet');
 const compression = require('compression');
@@ -23,6 +24,7 @@ function createApp() {
   // ── Global middleware (runs on every request) ──────────────────
   app.use(helmet());        // adds security headers like X-Frame-Options, CSP etc
   app.use(compression());   // gzip compress all responses — saves bandwidth
+  app.use('/api/webhooks', webhooksRouter);
   app.use(express.json({ limit: '1mb' })); // parse JSON request bodies
   app.use(morganMiddleware); // log every request
 
