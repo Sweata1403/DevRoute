@@ -66,4 +66,19 @@ async function closeClient() {
   }
 }
 
-module.exports = { getClient, getLink, setLink, deleteLink, closeClient };
+function getRedisConnection() {
+  return {
+    host: process.env.REDIS_HOST || 'redis',
+    port: parseInt(process.env.REDIS_PORT || '6379')
+  };
+}
+
+module.exports = { 
+  getClient, 
+  getLink, setLink, deleteLink,           // used in app.js
+  getCache: getLink,                       // alias used in routes/links.js
+  setCache: setLink,                       // alias used in routes/links.js
+  deleteCache: deleteLink,                 // alias used in routes/links.js
+  closeClient, 
+  getRedisConnection 
+};

@@ -70,6 +70,12 @@ async function runMigrations() {
   `);
 
   await query(`
+  ALTER TABLE links
+  ADD COLUMN IF NOT EXISTS health_status VARCHAR(20) DEFAULT 'unknown',
+  ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMP
+`);
+
+  await query(`
   CREATE TABLE IF NOT EXISTS audit_logs (
     id          SERIAL PRIMARY KEY,
     action      VARCHAR(100) NOT NULL,
@@ -81,7 +87,8 @@ async function runMigrations() {
     created_at  TIMESTAMP DEFAULT NOW()
   )
 `);
-
+  
+  await query(`CREATE INDEX IF NOT EXISTS idx_links_health ON links(health_status)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_audit_user_id ON audit_logs(user_id)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_audit_link_id ON audit_logs(link_id)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action)`);

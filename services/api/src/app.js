@@ -6,6 +6,8 @@ const compression = require('compression');
 const crypto = require('crypto');
 const auditRouter = require('./routes/audit');
 const { writeAuditLog } = require('./models/audit');
+const healthMonitorRouter = require('./routes/health-monitor');
+
 
 const { morganMiddleware, logger } = require('./middleware/requestLogger');
 const { readLimiter } = require('./middleware/rateLimiter');
@@ -35,7 +37,7 @@ function createApp() {
   app.use('/api/links', linksRouter);
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/audit', auditRouter);
-
+  app.use('/api/health-monitor', healthMonitorRouter);
     // ── The redirect — this is the core product feature ───────────
   // GET /:code → look up the code → 302 redirect to original URL
   app.get('/:code', readLimiter, async (req, res) => {
