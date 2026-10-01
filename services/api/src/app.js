@@ -10,8 +10,8 @@ const { readLimiter } = require('./middleware/rateLimiter');
 const linksRouter = require('./routes/links');
 const authRoutes = require('./routes/auth');
 const analyticsRouter = require('./routes/analytics');
-const { findByCode } = require('./models/link');
-const { getLink, setLink } = require('./cache/redis');
+const { findByCode, recordClick, markLinkInactive, getClickCount } = require('./models/link');
+const { getLink, setLink, deleteCache } = require('./cache/redis');
 
 function createApp() {
   const app = express();
@@ -44,20 +44,39 @@ function createApp() {
     if (!link) {
       // 2. Cache miss — go to Postgres (slow path — milliseconds)
       link = await findByCode(code);
-      if (link) await setLink(code, link); // store in cache for next time
+      if (link) await setLink(code, link);
     }
 
     if (!link) {
       return res.status(404).json({ error: 'Short link not found' });
     }
 
-    // 3. Check if the link has expired
+    // 3. Check if the link has expired by date
     if (link.expires_at && new Date(link.expires_at) < new Date()) {
+      await deleteCache(link.code);
+      await markLinkInactive(link.id);
       return res.status(410).json({ error: 'This short link has expired' });
-      // 410 Gone = resource existed but is permanently gone (different from 404)
     }
 
-    // 4. Redirect — 302 means temporary redirect (browser won't cache it)
+    // 4. Check if max clicks has been reached
+    if (link.max_clicks) {
+      const clickCount = await getClickCount(link.id);
+      if (clickCount >= link.max_clicks) {
+        await deleteCache(link.code);
+        await markLinkInactive(link.id);
+        return res.status(410).json({ error: 'This short link has reached its maximum clicks' });
+      }
+    }
+
+    // 5. Record the click (fire and forget — don't slow down the redirect)
+    recordClick({
+      linkId: link.id,
+      userAgent: req.headers['user-agent'],
+      ipAddress: req.ip,
+      referer: req.headers['referer'] || null
+    }).catch(err => logger.error('Failed to record click', { error: err.message }));
+
+    // 6. Redirect — 302 means temporary redirect
     return res.redirect(302, link.url);
   });
 

@@ -159,13 +159,20 @@ async function generateQRCode(code) {
   return dataUrl;
 }
 
+async function markLinkInactive(linkId) {
+  await query(`UPDATE links SET active = FALSE WHERE id = $1`, [linkId]);
+}
+
+async function getClickCount(linkId) {
+  const result = await query(
+    `SELECT COUNT(*) FROM clicks WHERE link_id = $1`,
+    [linkId]
+  );
+  return parseInt(result.rows[0].count);
+}
+
 module.exports = {
-  createLink,
-  findByCode,
-  isLinkValid,
-  listLinks,
-  deleteLink,
-  recordClick,
-  getAnalytics,
-  generateQRCode
+  createLink, findByCode, isLinkValid, listLinks,
+  deleteLink, recordClick, getAnalytics, generateQRCode,
+  markLinkInactive, getClickCount
 };

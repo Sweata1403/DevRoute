@@ -4,6 +4,8 @@ const { createApp } = require('./app');
 const { runMigrations, closePool } = require('./db/postgres');
 const { closeClient } = require('./cache/redis');
 const { logger } = require('./middleware/requestLogger');
+const { startExpiryJob } = require('./jobs/expiry.job');
+
 
 const PORT = parseInt(process.env.PORT || '3000');
 
@@ -11,6 +13,7 @@ async function start() {
   // Step 1: run DB migrations before accepting any traffic
   try {
     await runMigrations();
+    startExpiryJob();
   } catch (err) {
     logger.error('Migration failed — cannot start', { error: err.message });
     process.exit(1); // exit with error code — Docker/ECS will restart the container
