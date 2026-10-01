@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const auditRouter = require('./routes/audit');
 const { writeAuditLog } = require('./models/audit');
 const healthMonitorRouter = require('./routes/health-monitor');
-
+const cors = require('cors');
 
 const { morganMiddleware, logger } = require('./middleware/requestLogger');
 const { readLimiter } = require('./middleware/rateLimiter');
@@ -22,6 +22,10 @@ function createApp() {
   const app = express();
 
   // ── Global middleware (runs on every request) ──────────────────
+  app.use(cors({
+  origin: ['http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003'],
+  credentials: true
+  }));
   app.use(helmet());        // adds security headers like X-Frame-Options, CSP etc
   app.use(compression());   // gzip compress all responses — saves bandwidth
   app.use('/api/webhooks', webhooksRouter);
