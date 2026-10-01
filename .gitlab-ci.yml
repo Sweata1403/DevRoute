@@ -15,6 +15,7 @@ stages:
   - test
   - scan
   - push
+  - deploy
 
 # ── Build ────────────────────────────────────────────────────────────────────
 build:
@@ -110,4 +111,46 @@ push-to-ecr:
     - job: build
       artifacts: true
     - job: trivy-scan
+
+# ── Deployment Preview Link ───────────────────────────────────────────────────
+preview-link:
+  stage: deploy
+  image: curlimages/curl:latest
+  needs:
+    - job: push-to-ecr
+      artifacts: true
+  when: on_success
+  variables:
+    DEVROUTE_API_URL: "http://your-ec2-ip:3000"
+    DEVROUTE_API_TOKEN: $DEVROUTE_API_TOKEN
+  script:
+    - |
+      echo "Creating deployment preview link..."
+
+      RESPONSE=$(curl -s -X POST "${DEVROUTE_API_URL}/api/links" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${DEVROUTE_API_TOKEN}" \
+        -d "{
+          \"url\": \"${DEVROUTE_API_URL}\",
+          \"alias\": \"deploy-${CI_COMMIT_SHORT_SHA}\"
+        }")
+
+      echo "API Response: $RESPONSE"
+
+      SHORT_CODE=$(echo "$RESPONSE" | grep -o '"code":"[^"]*"' | cut -d'"' -f4)
+      SHORT_URL="${DEVROUTE_API_URL}/${SHORT_CODE}"
+
+      echo ""
+      echo "========================================="
+      echo "  Deployment Preview Link"
+      echo "  $SHORT_URL"
+      echo "  Commit: $CI_COMMIT_SHORT_SHA"
+      echo "  Branch: $CI_COMMIT_BRANCH"
+      echo "  Pipeline: $CI_PIPELINE_URL"
+      echo "========================================="
+  environment:
+    name: preview/$CI_COMMIT_SHORT_SHA
+    url: $DEVROUTE_API_URL/deploy-$CI_COMMIT_SHORT_SHA
+  only:
+    - main
 
