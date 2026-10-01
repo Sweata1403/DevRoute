@@ -4,6 +4,8 @@ const express = require('express');
 const helmet = require('helmet');
 const compression = require('compression');
 const crypto = require('crypto');
+const auditRouter = require('./routes/audit');
+const { writeAuditLog } = require('./models/audit');
 
 const { morganMiddleware, logger } = require('./middleware/requestLogger');
 const { readLimiter } = require('./middleware/rateLimiter');
@@ -32,8 +34,9 @@ function createApp() {
   app.use('/api/auth', authRoutes);
   app.use('/api/links', linksRouter);
   app.use('/api/analytics', analyticsRouter);
+  app.use('/api/audit', auditRouter);
 
-  // ── The redirect — this is the core product feature ───────────
+    // ── The redirect — this is the core product feature ───────────
   // GET /:code → look up the code → 302 redirect to original URL
   app.get('/:code', readLimiter, async (req, res) => {
     const { code } = req.params;
@@ -48,6 +51,7 @@ function createApp() {
     }
 
     if (!link) {
+      writeAuditLog({ action: 'redirect.not_found', ipAddress: req.ip, metadata: { code } }).catch(() => {});
       return res.status(404).json({ error: 'Short link not found' });
     }
 
@@ -55,6 +59,7 @@ function createApp() {
     if (link.expires_at && new Date(link.expires_at) < new Date()) {
       await deleteCache(link.code);
       await markLinkInactive(link.id);
+      writeAuditLog({ action: 'redirect.expired', userId: link.user_id, linkId: link.id, ipAddress: req.ip }).catch(() => {});
       return res.status(410).json({ error: 'This short link has expired' });
     }
 
@@ -64,6 +69,7 @@ function createApp() {
       if (clickCount >= link.max_clicks) {
         await deleteCache(link.code);
         await markLinkInactive(link.id);
+        writeAuditLog({ action: 'redirect.maxed', userId: link.user_id, linkId: link.id, ipAddress: req.ip }).catch(() => {});
         return res.status(410).json({ error: 'This short link has reached its maximum clicks' });
       }
     }
@@ -76,7 +82,10 @@ function createApp() {
       referer: req.headers['referer'] || null
     }).catch(err => logger.error('Failed to record click', { error: err.message }));
 
-    // 6. Redirect — 302 means temporary redirect
+    // 6. Audit successful redirect
+    writeAuditLog({ action: 'redirect.success', userId: link.user_id, linkId: link.id, ipAddress: req.ip }).catch(() => {});
+
+    // 7. Redirect — 302 means temporary redirect
     return res.redirect(302, link.url);
   });
 

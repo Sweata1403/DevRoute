@@ -6,6 +6,7 @@ const {
 } = require('../models/link');
 const { getCache, setCache, deleteCache } = require('../cache/redis');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
+const { writeAuditLog } = require('../models/audit');
 
 const router = express.Router();
 
@@ -39,6 +40,10 @@ router.post('/', requireAuth, async (req, res, next) => {
       expiresAt: expiresAt || null,
       maxClicks: maxClicks || null
     });
+
+    writeAuditLog({ action: 'link.created', userId: req.user.id, linkId: link.id, ipAddress: req.ip, metadata: { url, alias } }).catch(() => {});
+
+    res.status(201).json(link);
 
     res.status(201).json(link);
   } catch (err) {
@@ -111,6 +116,7 @@ router.delete('/:code', requireAuth, async (req, res, next) => {
     if (!deleted) return res.status(404).json({ error: 'Link not found or not yours' });
 
     await deleteCache(code);
+    writeAuditLog({ action: 'link.deleted', userId: req.user.id, ipAddress: req.ip, metadata: { code } }).catch(() => {});
     res.status(204).send();
   } catch (err) {
     next(err);
