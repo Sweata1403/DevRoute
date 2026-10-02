@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const crypto = require('crypto');
 const auditRouter = require('./routes/audit');
+const metricsRouter = require('./routes/metrics');
 const { writeAuditLog } = require('./models/audit');
 const healthMonitorRouter = require('./routes/health-monitor');
 const cors = require('cors');
@@ -37,6 +38,9 @@ function createApp() {
   app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
+
+  // ── Metrics — mounted BEFORE requireAuth so Prometheus can scrape without a token ──
+  app.use('/metrics', metricsRouter);
 
   // ── API routes ─────────────────────────────────────────────────
   app.use('/api/auth', authRoutes);
