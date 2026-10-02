@@ -64,14 +64,9 @@ trivy-scan:
   image:
     name: aquasec/trivy:latest
     entrypoint: [""]
-    script:
-      - gunzip -c image.tar.gz > image.tar
-      - trivy image
-        --exit-code 1
-        --severity HIGH,CRITICAL
-        --no-progress
-        --skip-dirs /usr/local/lib/node_modules/npm
-        --input image.tar
+  script:
+    - gunzip -c image.tar.gz > image.tar
+    - trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress --skip-dirs /usr/local/lib/node_modules/npm --input image.tar
   artifacts:
     when: always
     reports:
@@ -79,11 +74,7 @@ trivy-scan:
     paths:
       - trivy-report.json
   after_script:
-    - trivy image
-      --format template
-      --template "@/contrib/gitlab.tpl"
-      --output trivy-report.json
-      --input image.tar || true
+    - trivy image --format template --template "@/contrib/gitlab.tpl" --output trivy-report.json --input image.tar || true
   only:
     - main
 
