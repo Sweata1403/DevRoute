@@ -1,5 +1,6 @@
 const request = require('supertest');
-const app = require('../src/app');
+const { createApp } = require('../src/app');
+const app = createApp();
 
 describe('Auth Routes', () => {
   describe('POST /api/auth/register', () => {
