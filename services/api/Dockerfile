@@ -1,6 +1,7 @@
 # ── Stage 1: Install dependencies ────────────────────────────────
 # We use a separate stage so node_modules doesn't bloat the final image
 FROM node:20-alpine AS deps
+RUN apk upgrade --no-cache
 
 WORKDIR /app
 COPY package*.json ./
@@ -35,3 +36,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget -qO- http://localhost:3000/health || exit 1
 
 CMD ["node", "src/index.js"]
+
