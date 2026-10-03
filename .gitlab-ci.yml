@@ -7,7 +7,6 @@ variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: "/certs"
   IMAGE_NAME: devroute-api
-  ECR_REGISTRY: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
   IMAGE_TAG: ${CI_COMMIT_SHORT_SHA}
 
 stages:
@@ -81,13 +80,15 @@ trivy-scan:
 # ── Push to ECR ──────────────────────────────────────────────────────────────
 push-to-ecr:
   stage: push
-  image:
-    name: amazon/aws-cli:latest
-    entrypoint: [""]
+  image: docker:24
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
   before_script:
-    - aws --version
-    - aws ecr get-login-password --region ${AWS_REGION} |
-      docker login --username AWS --password-stdin ${ECR_REGISTRY}
+    - apk add --no-cache aws-cli
+    - aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
   script:
     - gunzip -c image.tar.gz | docker load
     - docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
@@ -106,44 +107,28 @@ push-to-ecr:
     - job: trivy-scan
 
 # ── Deployment Preview Link ───────────────────────────────────────────────────
-preview-link:
+deploy-to-ec2:
   stage: deploy
-  image: curlimages/curl:latest
+  image: alpine:latest
   needs:
     - job: push-to-ecr
       artifacts: true
-  when: on_success
-  variables:
-    DEVROUTE_API_URL: "http://your-ec2-ip:3000"
-    DEVROUTE_API_TOKEN: $DEVROUTE_API_TOKEN
+  before_script:
+    - apk add --no-cache openssh-client aws-cli
+    - mkdir -p ~/.ssh
+    - cp $EC2_SSH_KEY ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H ${EC2_HOST} >> ~/.ssh/known_hosts
   script:
     - |
-      echo "Creating deployment preview link..."
-
-      RESPONSE=$(curl -s -X POST "${DEVROUTE_API_URL}/api/links" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer ${DEVROUTE_API_TOKEN}" \
-        -d "{
-          \"url\": \"${DEVROUTE_API_URL}\",
-          \"alias\": \"deploy-${CI_COMMIT_SHORT_SHA}\"
-        }")
-
-      echo "API Response: $RESPONSE"
-
-      SHORT_CODE=$(echo "$RESPONSE" | grep -o '"code":"[^"]*"' | cut -d'"' -f4)
-      SHORT_URL="${DEVROUTE_API_URL}/${SHORT_CODE}"
-
-      echo ""
-      echo "========================================="
-      echo "  Deployment Preview Link"
-      echo "  $SHORT_URL"
-      echo "  Commit: $CI_COMMIT_SHORT_SHA"
-      echo "  Branch: $CI_COMMIT_BRANCH"
-      echo "  Pipeline: $CI_PIPELINE_URL"
-      echo "========================================="
-  environment:
-    name: preview/$CI_COMMIT_SHORT_SHA
-    url: $DEVROUTE_API_URL/deploy-$CI_COMMIT_SHORT_SHA
+      ssh -i ~/.ssh/id_rsa ubuntu@${EC2_HOST} "
+        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+        docker pull ${ECR_REGISTRY}/${IMAGE_NAME}:latest
+        docker stop devroute-api || true
+        docker rm devroute-api || true
+        docker run -d --name devroute-api --restart unless-stopped -p 3000:3000 ${ECR_REGISTRY}/${IMAGE_NAME}:latest
+        echo 'Deployment complete'
+      "
   only:
     - main
 
