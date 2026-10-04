@@ -20,9 +20,6 @@ pipeline {
 
     stages {
 
-        // ─────────────────────────────────────────
-        // 1. BUILD
-        // ─────────────────────────────────────────
         stage('Build') {
             steps {
                 script {
@@ -35,16 +32,12 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────
-        // 2. TEST
-        // ─────────────────────────────────────────
         stage('Test') {
             steps {
                 script {
                     sh """
                         docker network create test-net-${IMAGE_TAG} || true
 
-                        # Start Postgres
                         docker run -d --name pg-${IMAGE_TAG} \
                             --network test-net-${IMAGE_TAG} \
                             -e POSTGRES_USER=devroute \
@@ -52,14 +45,12 @@ pipeline {
                             -e POSTGRES_DB=devroute_test \
                             postgres:15-alpine
 
-                        # Start Redis
                         docker run -d --name redis-${IMAGE_TAG} \
                             --network test-net-${IMAGE_TAG} \
                             redis:7-alpine
 
                         sleep 5
 
-                        # Run tests inside the app image
                         docker run --rm \
                             --network test-net-${IMAGE_TAG} \
                             -e DATABASE_URL=postgresql://devroute:devroute@pg-${IMAGE_TAG}:5432/devroute_test \
@@ -79,13 +70,7 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────
-        // 3. PUSH TO ECR
-        // ─────────────────────────────────────────
         stage('Push to ECR') {
-            when {
-                branch 'main'
-            }
             steps {
                 withCredentials([
                     string(credentialsId: 'AWS_ACCESS_KEY_ID',     variable: 'AWS_ACCESS_KEY_ID'),
@@ -105,13 +90,7 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────
-        // 4. DEPLOY TO STAGING
-        // ─────────────────────────────────────────
         stage('Deploy to Staging') {
-            when {
-                branch 'main'
-            }
             steps {
                 withCredentials([
                     sshUserPrivateKey(credentialsId: 'EC2_SSH_KEY', keyFileVariable: 'SSH_KEY'),
@@ -154,13 +133,7 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────
-        // 5. MANUAL APPROVAL GATE
-        // ─────────────────────────────────────────
         stage('Approve Production Deploy') {
-            when {
-                branch 'main'
-            }
             steps {
                 timeout(time: 30, unit: 'MINUTES') {
                     input message: "Deploy ${IMAGE_NAME}:${IMAGE_TAG} to PRODUCTION?",
@@ -170,13 +143,7 @@ pipeline {
             }
         }
 
-        // ─────────────────────────────────────────
-        // 6. DEPLOY TO PRODUCTION
-        // ─────────────────────────────────────────
         stage('Deploy to Production') {
-            when {
-                branch 'main'
-            }
             steps {
                 withCredentials([
                     sshUserPrivateKey(credentialsId: 'EC2_SSH_KEY', keyFileVariable: 'SSH_KEY'),
@@ -189,7 +156,6 @@ pipeline {
                             export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
                             export AWS_DEFAULT_REGION="${AWS_REGION}"
 
-                            # Save current image tag for rollback
                             PREV_TAG=\$(docker inspect devroute-api --format="{{.Config.Image}}" 2>/dev/null | awk -F: "{print \$2}" || echo "none")
                             echo \$PREV_TAG > /tmp/devroute-prev-tag
 
@@ -237,7 +203,7 @@ pipeline {
             }
         }
 
-    } // end stages
+    }
 
     post {
         always {
