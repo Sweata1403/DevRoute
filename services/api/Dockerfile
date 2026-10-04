@@ -5,7 +5,7 @@ RUN apk upgrade --no-cache
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 # npm ci = clean install (faster, deterministic, uses package-lock.json exactly)
 # --omit=dev = skip devDependencies (jest, nodemon etc — not needed in production)
 

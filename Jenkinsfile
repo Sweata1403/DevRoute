@@ -66,7 +66,7 @@ pipeline {
                             -e REDIS_URL=redis://redis-${IMAGE_TAG}:6379 \
                             -e NODE_ENV=test \
                             ${IMAGE_NAME}:${IMAGE_TAG} \
-                            sh -c "npm test" || {
+                            sh -c "npm install --include=dev && npm test" || {
                                 docker rm -f pg-${IMAGE_TAG} redis-${IMAGE_TAG} || true
                                 docker network rm test-net-${IMAGE_TAG} || true
                                 exit 1
