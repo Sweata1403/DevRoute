@@ -93,17 +93,21 @@ pipeline {
             steps {
                 withCredentials([
                     string(credentialsId: 'AWS_ACCESS_KEY_ID',     variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+                    string(credentialsId: 'STAGING_DATABASE_URL',  variable: 'STAGING_DATABASE_URL'),
+                    string(credentialsId: 'STAGING_REDIS_URL',     variable: 'STAGING_REDIS_URL')
                 ]) {
-                    sh """
-                        export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
-                        export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
-                        export AWS_DEFAULT_REGION="${AWS_REGION}"
+                    sh '''
+                        export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
+                        export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY"
+                        export AWS_DEFAULT_REGION="us-east-1"
 
-                        aws ecr get-login-password --region ${AWS_REGION} | \
-                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        aws ecr get-login-password --region us-east-1 | \
+                            docker login --username AWS --password-stdin 131540502908.dkr.ecr.us-east-1.amazonaws.com
 
-                        docker pull ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        IMAGE_TAG=$(echo $GIT_COMMIT | cut -c1-7)
+
+                        docker pull 131540502908.dkr.ecr.us-east-1.amazonaws.com/devroute-api:$IMAGE_TAG
 
                         docker stop devroute-staging || true
                         docker rm   devroute-staging || true
@@ -111,20 +115,22 @@ pipeline {
                         docker run -d \
                             --name devroute-staging \
                             --restart unless-stopped \
-                            -p ${STAGING_PORT}:3000 \
+                            -p 3001:3000 \
                             -e NODE_ENV=staging \
-                            ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                            -e DATABASE_URL="$STAGING_DATABASE_URL" \
+                            -e REDIS_URL="$STAGING_REDIS_URL" \
+                            131540502908.dkr.ecr.us-east-1.amazonaws.com/devroute-api:$IMAGE_TAG
 
                         echo "Waiting for staging to be healthy..."
-                        sleep 8
-                        curl -f http://localhost:${STAGING_PORT}/health || exit 1
+                        sleep 10
+                        curl -f http://localhost:3001/health || exit 1
                         echo "Staging healthy ✓"
-                    """
+                    '''
                 }
             }
             post {
                 success {
-                    echo "Staging deployed on port ${STAGING_PORT}"
+                    echo "Staging deployed on port 3001"
                 }
             }
         }
@@ -143,20 +149,24 @@ pipeline {
             steps {
                 withCredentials([
                     string(credentialsId: 'AWS_ACCESS_KEY_ID',     variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+                    string(credentialsId: 'STAGING_DATABASE_URL',  variable: 'STAGING_DATABASE_URL'),
+                    string(credentialsId: 'STAGING_REDIS_URL',     variable: 'STAGING_REDIS_URL')
                 ]) {
-                    sh """
-                        export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
-                        export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
-                        export AWS_DEFAULT_REGION="${AWS_REGION}"
+                    sh '''
+                        export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
+                        export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY"
+                        export AWS_DEFAULT_REGION="us-east-1"
 
-                        PREV_TAG=\$(docker inspect devroute-api --format='{{index .Config.Labels "image-tag"}}' 2>/dev/null || echo "none")
-                        echo "Previous tag: \$PREV_TAG"
+                        PREV_TAG=$(docker inspect devroute-api --format='{{index .Config.Labels "image-tag"}}' 2>/dev/null || echo "none")
+                        echo "Previous tag: $PREV_TAG"
 
-                        aws ecr get-login-password --region ${AWS_REGION} | \
-                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        aws ecr get-login-password --region us-east-1 | \
+                            docker login --username AWS --password-stdin 131540502908.dkr.ecr.us-east-1.amazonaws.com
 
-                        docker pull ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        IMAGE_TAG=$(echo $GIT_COMMIT | cut -c1-7)
+
+                        docker pull 131540502908.dkr.ecr.us-east-1.amazonaws.com/devroute-api:$IMAGE_TAG
 
                         docker stop devroute-api || true
                         docker rm   devroute-api || true
@@ -164,35 +174,39 @@ pipeline {
                         docker run -d \
                             --name devroute-api \
                             --restart unless-stopped \
-                            -p ${PROD_PORT}:3000 \
+                            -p 3000:3000 \
                             -e NODE_ENV=production \
-                            --label image-tag=${IMAGE_TAG} \
-                            ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                            -e DATABASE_URL="$STAGING_DATABASE_URL" \
+                            -e REDIS_URL="$STAGING_REDIS_URL" \
+                            --label image-tag=$IMAGE_TAG \
+                            131540502908.dkr.ecr.us-east-1.amazonaws.com/devroute-api:$IMAGE_TAG
 
                         echo "Waiting for production to be healthy..."
-                        sleep 8
-                        curl -f http://localhost:${PROD_PORT}/health || {
-                            echo "Health check failed — rolling back to \$PREV_TAG"
+                        sleep 10
+                        curl -f http://localhost:3000/health || {
+                            echo "Health check failed — rolling back to $PREV_TAG"
                             docker stop devroute-api || true
                             docker rm   devroute-api || true
-                            if [ "\$PREV_TAG" != "none" ] && [ -n "\$PREV_TAG" ]; then
+                            if [ "$PREV_TAG" != "none" ] && [ -n "$PREV_TAG" ]; then
                                 docker run -d \
                                     --name devroute-api \
                                     --restart unless-stopped \
-                                    -p ${PROD_PORT}:3000 \
+                                    -p 3000:3000 \
                                     -e NODE_ENV=production \
-                                    --label image-tag=\$PREV_TAG \
-                                    ${ECR_REGISTRY}/${IMAGE_NAME}:\$PREV_TAG
+                                    -e DATABASE_URL="$STAGING_DATABASE_URL" \
+                                    -e REDIS_URL="$STAGING_REDIS_URL" \
+                                    --label image-tag=$PREV_TAG \
+                                    131540502908.dkr.ecr.us-east-1.amazonaws.com/devroute-api:$PREV_TAG
                             fi
                             exit 1
                         }
-                        echo "Production healthy ✓ — deployed ${IMAGE_TAG}"
-                    """
+                        echo "Production healthy ✓ — deployed $IMAGE_TAG"
+                    '''
                 }
             }
             post {
                 success {
-                    echo "Production deployed on port ${PROD_PORT}"
+                    echo "Production deployed on port 3000"
                 }
                 failure {
                     echo "Production deploy failed — automatic rollback triggered"
