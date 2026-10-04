@@ -22,7 +22,6 @@ WORKDIR /app
 # Copy only what we need from Stage 1 (not the full build environment)
 COPY --from=deps /app/node_modules ./node_modules
 COPY src/ ./src/
-COPY tests/ ./tests/
 COPY package.json ./
 
 # Give ownership to our non-root user
