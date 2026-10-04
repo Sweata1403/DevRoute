@@ -129,7 +129,7 @@ pipeline {
 
                         echo "Waiting for staging to be healthy..."
                         sleep 12
-                        curl -f http://localhost:3001/health || exit 1
+                        curl -f http://172.17.0.1:3001/health || exit 1
                         echo "Staging healthy ✓"
                     '''
                 }
@@ -191,7 +191,7 @@ pipeline {
 
                         echo "Waiting for production to be healthy..."
                         sleep 12
-                        curl -f http://localhost:3000/health || {
+                        curl -f http://172.17.0.1:3000/health || {
                             echo "Health check failed — rolling back to $PREV_TAG"
                             docker stop devroute-api || true
                             docker rm   devroute-api || true
