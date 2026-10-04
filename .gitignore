@@ -12,6 +12,7 @@ npm-debug.log*
 *.tfstate
 *.tfstate.backup
 .terraform.lock.hcl
+*.tfvars
 
 # Ansible — generated files and vault secrets
 *.retry
