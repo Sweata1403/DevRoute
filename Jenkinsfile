@@ -52,7 +52,11 @@ pipeline {
 
                         docker run --rm \
                             --network test-net-${IMAGE_TAG} \
-                            -e DATABASE_URL=postgresql://devroute:devroute@pg-${IMAGE_TAG}:5432/devroute_test \
+                            -e POSTGRES_HOST=pg-${IMAGE_TAG} \
+                            -e POSTGRES_PORT=5432 \
+                            -e POSTGRES_DB=devroute_test \
+                            -e POSTGRES_USER=devroute \
+                            -e POSTGRES_PASSWORD=devroute \
                             -e REDIS_URL=redis://redis-${IMAGE_TAG}:6379 \
                             -e NODE_ENV=test \
                             ${IMAGE_NAME}:${IMAGE_TAG} \
@@ -93,9 +97,7 @@ pipeline {
             steps {
                 withCredentials([
                     string(credentialsId: 'AWS_ACCESS_KEY_ID',     variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
-                    string(credentialsId: 'STAGING_DATABASE_URL',  variable: 'STAGING_DATABASE_URL'),
-                    string(credentialsId: 'STAGING_REDIS_URL',     variable: 'STAGING_REDIS_URL')
+                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
                     sh '''
                         export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
@@ -117,12 +119,16 @@ pipeline {
                             --restart unless-stopped \
                             -p 3001:3000 \
                             -e NODE_ENV=staging \
-                            -e DATABASE_URL="$STAGING_DATABASE_URL" \
-                            -e REDIS_URL="$STAGING_REDIS_URL" \
+                            -e POSTGRES_HOST=172.17.0.1 \
+                            -e POSTGRES_PORT=5432 \
+                            -e POSTGRES_DB=devroute \
+                            -e POSTGRES_USER=devroute \
+                            -e POSTGRES_PASSWORD=devroute \
+                            -e REDIS_URL=redis://172.17.0.1:6379 \
                             131540502908.dkr.ecr.us-east-1.amazonaws.com/devroute-api:$IMAGE_TAG
 
                         echo "Waiting for staging to be healthy..."
-                        sleep 10
+                        sleep 12
                         curl -f http://localhost:3001/health || exit 1
                         echo "Staging healthy ✓"
                     '''
@@ -149,9 +155,7 @@ pipeline {
             steps {
                 withCredentials([
                     string(credentialsId: 'AWS_ACCESS_KEY_ID',     variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
-                    string(credentialsId: 'STAGING_DATABASE_URL',  variable: 'STAGING_DATABASE_URL'),
-                    string(credentialsId: 'STAGING_REDIS_URL',     variable: 'STAGING_REDIS_URL')
+                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
                     sh '''
                         export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
@@ -176,13 +180,17 @@ pipeline {
                             --restart unless-stopped \
                             -p 3000:3000 \
                             -e NODE_ENV=production \
-                            -e DATABASE_URL="$STAGING_DATABASE_URL" \
-                            -e REDIS_URL="$STAGING_REDIS_URL" \
+                            -e POSTGRES_HOST=172.17.0.1 \
+                            -e POSTGRES_PORT=5432 \
+                            -e POSTGRES_DB=devroute \
+                            -e POSTGRES_USER=devroute \
+                            -e POSTGRES_PASSWORD=devroute \
+                            -e REDIS_URL=redis://172.17.0.1:6379 \
                             --label image-tag=$IMAGE_TAG \
                             131540502908.dkr.ecr.us-east-1.amazonaws.com/devroute-api:$IMAGE_TAG
 
                         echo "Waiting for production to be healthy..."
-                        sleep 10
+                        sleep 12
                         curl -f http://localhost:3000/health || {
                             echo "Health check failed — rolling back to $PREV_TAG"
                             docker stop devroute-api || true
@@ -193,8 +201,12 @@ pipeline {
                                     --restart unless-stopped \
                                     -p 3000:3000 \
                                     -e NODE_ENV=production \
-                                    -e DATABASE_URL="$STAGING_DATABASE_URL" \
-                                    -e REDIS_URL="$STAGING_REDIS_URL" \
+                                    -e POSTGRES_HOST=172.17.0.1 \
+                                    -e POSTGRES_PORT=5432 \
+                                    -e POSTGRES_DB=devroute \
+                                    -e POSTGRES_USER=devroute \
+                                    -e POSTGRES_PASSWORD=devroute \
+                                    -e REDIS_URL=redis://172.17.0.1:6379 \
                                     --label image-tag=$PREV_TAG \
                                     131540502908.dkr.ecr.us-east-1.amazonaws.com/devroute-api:$PREV_TAG
                             fi
