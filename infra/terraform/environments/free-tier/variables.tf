@@ -4,16 +4,17 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
-variable "db_username" {
-  description = "RDS master username"
-  type        = string
-  default     = "devroute"
-}
-
 variable "db_password" {
-  description = "RDS master password"
+  description = "PostgreSQL master password"
   type        = string
   sensitive   = true
+}
+
+variable "redis_password" {
+  description = "Redis password (leave empty string to disable auth)"
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
 variable "jwt_secret" {
@@ -23,7 +24,7 @@ variable "jwt_secret" {
 }
 
 variable "public_key_path" {
-  description = "Path to SSH public key"
+  description = "Path to SSH public key for EC2 access"
   type        = string
   default     = "~/.ssh/devroute.pub"
 }

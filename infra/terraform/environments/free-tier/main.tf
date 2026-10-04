@@ -19,18 +19,18 @@ provider "aws" {
   region = var.aws_region
 }
 
-# VPC - simple, no NAT Gateway
+# ─── VPC ─────────────────────────────────────────────────────────────────────
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
 
-  tags = { Name = "devroute-vpc" }
+  tags = { Name = "devroute-vpc", ManagedBy = "terraform" }
 }
 
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "devroute-igw" }
+  tags   = { Name = "devroute-igw", ManagedBy = "terraform" }
 }
 
 resource "aws_subnet" "public" {
@@ -39,7 +39,7 @@ resource "aws_subnet" "public" {
   availability_zone       = "${var.aws_region}a"
   map_public_ip_on_launch = true
 
-  tags = { Name = "devroute-public-subnet" }
+  tags = { Name = "devroute-public-subnet", ManagedBy = "terraform" }
 }
 
 resource "aws_route_table" "public" {
@@ -50,7 +50,7 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.main.id
   }
 
-  tags = { Name = "devroute-public-rt" }
+  tags = { Name = "devroute-public-rt", ManagedBy = "terraform" }
 }
 
 resource "aws_route_table_association" "public" {
@@ -58,7 +58,7 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# Security Group for EC2
+# ─── Security Groups ─────────────────────────────────────────────────────────
 resource "aws_security_group" "ec2" {
   name        = "devroute-ec2-sg"
   description = "Security group for DevRoute EC2 instance"
@@ -73,11 +73,27 @@ resource "aws_security_group" "ec2" {
   }
 
   ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Jenkins"
+  }
+
+  ingress {
     from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "API"
+    description = "API production"
+  }
+
+  ingress {
+    from_port   = 3001
+    to_port     = 3001
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "API staging"
   }
 
   egress {
@@ -85,68 +101,13 @@ resource "aws_security_group" "ec2" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
   }
 
-  tags = { Name = "devroute-ec2-sg" }
+  tags = { Name = "devroute-ec2-sg", ManagedBy = "terraform" }
 }
 
-# Security Group for RDS
-resource "aws_security_group" "rds" {
-  name        = "devroute-rds-sg"
-  description = "Security group for DevRoute RDS"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ec2.id]
-    description     = "PostgreSQL from EC2 only"
-  }
-
-  tags = { Name = "devroute-rds-sg" }
-}
-
-# RDS Subnet Group (needs 2 AZs minimum)
-resource "aws_subnet" "private" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = "${var.aws_region}b"
-
-  tags = { Name = "devroute-private-subnet" }
-}
-
-resource "aws_db_subnet_group" "main" {
-  name       = "devroute-db-subnet-group"
-  subnet_ids = [aws_subnet.public.id, aws_subnet.private.id]
-
-  tags = { Name = "devroute-db-subnet-group" }
-}
-
-# RDS PostgreSQL - free tier
-resource "aws_db_instance" "postgres" {
-  identifier        = "devroute-postgres"
-  engine            = "postgres"
-  engine_version    = "16"
-  instance_class    = "db.t3.micro"
-  allocated_storage = 20
-  storage_type      = "gp2"
-
-  db_name  = "devroute"
-  username = var.db_username
-  password = var.db_password
-
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [aws_security_group.rds.id]
-
-  publicly_accessible     = false
-  skip_final_snapshot     = true
-  backup_retention_period = 0
-
-  tags = { Name = "devroute-postgres" }
-}
-
-# ECR Repository
+# ─── ECR ─────────────────────────────────────────────────────────────────────
 resource "aws_ecr_repository" "api" {
   name                 = "devroute-api"
   image_tag_mutability = "MUTABLE"
@@ -155,40 +116,55 @@ resource "aws_ecr_repository" "api" {
     scan_on_push = true
   }
 
-  tags = { Name = "devroute-api" }
+  tags = { Name = "devroute-api", ManagedBy = "terraform" }
 }
 
-# Key pair for SSH
+resource "aws_ecr_lifecycle_policy" "api" {
+  repository = aws_ecr_repository.api.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Keep last 10 images"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 10
+      }
+      action = { type = "expire" }
+    }]
+  })
+}
+
+# ─── Key Pair ────────────────────────────────────────────────────────────────
 resource "aws_key_pair" "devroute" {
   key_name   = "devroute-key"
   public_key = file(var.public_key_path)
 }
 
-# EC2 t2.micro - free tier
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720109477"] # Canonical
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
-  }
-}
-
+# ─── EC2 ─────────────────────────────────────────────────────────────────────
 resource "aws_instance" "app" {
-  ami                    = data.aws_ami.ubuntu.id
+  ami                    = "ami-05a3e9423ae4d7a19"
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.ec2.id]
   key_name               = aws_key_pair.devroute.key_name
 
   user_data = templatefile("${path.module}/userdata.sh", {
-    ecr_registry = aws_ecr_repository.api.repository_url
-    db_host      = aws_db_instance.postgres.address
-    db_password  = var.db_password
-    jwt_secret   = var.jwt_secret
-    aws_region   = var.aws_region
+    ecr_registry   = aws_ecr_repository.api.repository_url
+    db_password    = var.db_password
+    jwt_secret     = var.jwt_secret
+    redis_password = var.redis_password
+    aws_region     = var.aws_region
   })
 
-  tags = { Name = "devroute-app" }
+  tags = { Name = "devroute-app", ManagedBy = "terraform" }
+}
+
+# Elastic IP — keeps the same IP across reboots / stop-start cycles
+resource "aws_eip" "app" {
+  instance = aws_instance.app.id
+  domain   = "vpc"
+
+  tags = { Name = "devroute-eip", ManagedBy = "terraform" }
 }
