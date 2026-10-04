@@ -125,6 +125,7 @@ pipeline {
                             -e POSTGRES_USER=devroute \
                             -e POSTGRES_PASSWORD=devroute \
                             -e REDIS_URL=redis://172.17.0.1:6379 \
+                            -e REDIS_HOST=172.17.0.1 \
                             131540502908.dkr.ecr.us-east-1.amazonaws.com/devroute-api:$IMAGE_TAG
 
                         echo "Waiting for staging to be healthy..."
@@ -182,6 +183,7 @@ pipeline {
                             -e NODE_ENV=production \
                             -e POSTGRES_SSL=false \
                             -e POSTGRES_HOST=172.17.0.1 \
+                            -e REDIS_HOST=172.17.0.1 \
                             -e POSTGRES_PORT=5432 \
                             -e POSTGRES_DB=devroute \
                             -e POSTGRES_USER=devroute \
@@ -204,6 +206,7 @@ pipeline {
                                     -e NODE_ENV=production \
                                     -e POSTGRES_SSL=false \
                                     -e POSTGRES_HOST=172.17.0.1 \
+                                    -e REDIS_HOST=172.17.0.1 \
                                     -e POSTGRES_PORT=5432 \
                                     -e POSTGRES_DB=devroute \
                                     -e POSTGRES_USER=devroute \
