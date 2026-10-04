@@ -6,7 +6,7 @@ pipeline {
         ECR_REGISTRY    = '131540502908.dkr.ecr.us-east-1.amazonaws.com'
         IMAGE_NAME      = 'devroute-api'
         IMAGE_TAG       = "${env.GIT_COMMIT[0..6]}"
-        EC2_HOST        = '98.80.170.66'
+        EC2_HOST        = '52.3.223.220'
         EC2_USER        = 'ubuntu'
         STAGING_PORT    = '3001'
         PROD_PORT       = '3000'
