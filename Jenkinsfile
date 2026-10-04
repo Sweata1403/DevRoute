@@ -180,6 +180,7 @@ pipeline {
                             --restart unless-stopped \
                             -p 3000:3000 \
                             -e NODE_ENV=production \
+                            -e POSTGRES_SSL=false \
                             -e POSTGRES_HOST=172.17.0.1 \
                             -e POSTGRES_PORT=5432 \
                             -e POSTGRES_DB=devroute \
@@ -201,6 +202,7 @@ pipeline {
                                     --restart unless-stopped \
                                     -p 3000:3000 \
                                     -e NODE_ENV=production \
+                                    -e POSTGRES_SSL=false \
                                     -e POSTGRES_HOST=172.17.0.1 \
                                     -e POSTGRES_PORT=5432 \
                                     -e POSTGRES_DB=devroute \

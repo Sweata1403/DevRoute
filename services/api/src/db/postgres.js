@@ -15,9 +15,8 @@ function getPool() {
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
-  ssl: process.env.NODE_ENV === 'production' 
-    ? { rejectUnauthorized: false } 
-    : false
+  ssl: process.env.POSTGRES_SSL === 'false' ? false :
+     process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
     pool.on('error', (err) => {
