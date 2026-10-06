@@ -119,6 +119,7 @@ pipeline {
                             --restart unless-stopped \
                             -p 3001:3000 \
                             -e NODE_ENV=staging \
+                            -e JWT_SECRET=devroute-prod-jwt-secret-2024 \
                             -e POSTGRES_HOST=172.17.0.1 \
                             -e POSTGRES_PORT=5432 \
                             -e POSTGRES_DB=devroute \
@@ -181,6 +182,7 @@ pipeline {
                             --restart unless-stopped \
                             -p 3000:3000 \
                             -e NODE_ENV=production \
+                            -e JWT_SECRET=devroute-prod-jwt-secret-2024 \
                             -e POSTGRES_SSL=false \
                             -e POSTGRES_HOST=172.17.0.1 \
                             -e REDIS_HOST=172.17.0.1 \
@@ -204,6 +206,7 @@ pipeline {
                                     --restart unless-stopped \
                                     -p 3000:3000 \
                                     -e NODE_ENV=production \
+                                    -e JWT_SECRET=devroute-prod-jwt-secret-2024 \
                                     -e POSTGRES_SSL=false \
                                     -e POSTGRES_HOST=172.17.0.1 \
                                     -e REDIS_HOST=172.17.0.1 \
