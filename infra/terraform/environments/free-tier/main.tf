@@ -159,6 +159,10 @@ resource "aws_instance" "app" {
   })
 
   tags = { Name = "devroute-app", ManagedBy = "terraform" }
+
+  lifecycle {
+    ignore_changes = [user_data]
+  }
 }
 
 # Elastic IP — keeps the same IP across reboots / stop-start cycles
