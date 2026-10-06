@@ -26,7 +26,7 @@ groups:
           team: platform
         annotations:
           summary: "High 5xx error rate on DevRoute API"
-          description: 'Error rate is {{ printf "%.1f" (mul $value 100) }}%.'
+          description: 'Error rate is {{ printf "%.1f" $value }}% (of requests).'
           runbook: "docs/runbooks.md#high-error-rate"
 
       - alert: HighLatency
@@ -56,5 +56,5 @@ groups:
           team: platform
         annotations:
           summary: "Cache hit rate dropped below 50%"
-          description: 'Cache hit rate is {{ printf "%.0f" (mul $value 100) }}%.'
+          description: 'Cache hit rate is {{ printf "%.0f" $value }}% hit rate.'
           runbook: "docs/runbooks.md#low-cache-hit-rate"
