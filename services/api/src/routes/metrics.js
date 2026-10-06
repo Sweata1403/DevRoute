@@ -80,7 +80,7 @@ router.get('/', async (req, res, next) => {
 
     // 3. Total clicks — count rows in click_events table
     const clickRes = await query(
-      `SELECT COUNT(*) AS total FROM click_events`
+      `SELECT COUNT(*) AS total FROM clicks`
     ).catch(() => ({ rows: [{ total: 0 }] }));
     clicksTotal.set(parseInt(clickRes.rows[0]?.total ?? 0));
 
