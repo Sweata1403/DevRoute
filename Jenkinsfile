@@ -60,9 +60,8 @@ pipeline {
                             -e REDIS_URL=redis://redis-${IMAGE_TAG}:6379 \
                             -e JWT_SECRET=devroute-test-jwt-secret \
                             -e NODE_ENV=test \
-                            -v ${WORKSPACE}/services/api/tests:/app/tests \
                             ${IMAGE_NAME}:${IMAGE_TAG} \
-                            sh -c "npm install --include=dev && npm test -- --forceExit" || {
+                            sh -c 'npm install --include=dev && npm test' || {
                                 docker rm -f pg-${IMAGE_TAG} redis-${IMAGE_TAG} || true
                                 docker network rm test-net-${IMAGE_TAG} || true
                                 exit 1
