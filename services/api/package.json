@@ -39,11 +39,12 @@
     "supertest": "^7.3.0"
   },
   "jest": {
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/tests/**/*.test.js"
-    ]
-  },
+  "testEnvironment": "node",
+  "globalSetup": "./tests/setup.js",
+  "testMatch": [
+    "**/tests/**/*.test.js"
+  ]
+},
   "engines": {
     "node": ">=20.0.0"
   }
