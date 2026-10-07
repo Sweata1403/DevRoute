@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "jest --runInBand --forceExit --passWithNoTests",
+    "test": "jest --runInBand --forceExit",
     "test:unit": "jest --testPathPattern=tests/unit --runInBand --forceExit",
     "test:integration": "jest --testPathPattern=tests/integration --runInBand --forceExit",
     "lint": "eslint src/ tests/"
