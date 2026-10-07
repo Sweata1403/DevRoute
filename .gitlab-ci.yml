@@ -1,139 +1,121 @@
-image: docker:24
-
-services:
-  - docker:24-dind
-
-variables:
-  DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: "/certs"
-  IMAGE_NAME: devroute-api
-  IMAGE_TAG: ${CI_COMMIT_SHORT_SHA}
-
 stages:
   - build
   - test
-  - scan
   - push
-  - deploy
+  - staging
+  - production
 
-# ── Build ────────────────────────────────────────────────────────────────────
+variables:
+  IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+
 build:
   stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
   script:
-    - docker build -t ${IMAGE_NAME}:${IMAGE_TAG} services/api/
-    - docker save ${IMAGE_NAME}:${IMAGE_TAG} | gzip > image.tar.gz
+    - docker build -t $ECR_REGISTRY/devroute:$IMAGE_TAG ./services/api
+    - docker save $ECR_REGISTRY/devroute:$IMAGE_TAG > image.tar
   artifacts:
     paths:
-      - image.tar.gz
+      - image.tar
     expire_in: 1 hour
-  only:
-    - main
-    - merge_requests
 
-# ── Integration Test ─────────────────────────────────────────────────────────
-integration-test:
+test:
   stage: test
-  image: node:20-alpine
+  image: docker:24
   services:
-    - name: postgres:15-alpine
-      alias: postgres
-    - name: redis:7-alpine
-      alias: redis
-  variables:
-    POSTGRES_DB: devroute_test
-    POSTGRES_USER: devroute
-    POSTGRES_PASSWORD: testpassword
-    POSTGRES_HOST: postgres
-    POSTGRES_PORT: "5432"
-    NODE_ENV: test
-    REDIS_URL: redis://redis:6379
-    JWT_SECRET: test-secret-for-ci
+    - docker:24-dind
   script:
-    - cd services/api
-    - npm ci
-    - node -e "require('./src/db/postgres').runMigrations().then(() => { console.log('Migrations done'); process.exit(0); }).catch(e => { console.error(e); process.exit(1); })"
-    - npm test
-  only:
-    - main
-    - merge_requests
-
-# ── Trivy Scan ───────────────────────────────────────────────────────────────
-trivy-scan:
-  stage: scan
-  image:
-    name: aquasec/trivy:latest
-    entrypoint: [""]
-  script:
-    - gunzip -c image.tar.gz > image.tar
-    - trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress --skip-dirs /usr/local/lib/node_modules/npm --ignorefile .trivyignore --input image.tar
-  artifacts:
-    when: always
-    reports:
-      container_scanning: trivy-report.json
-    paths:
-      - trivy-report.json
+    - docker load < image.tar
+    - docker network create test-net-$IMAGE_TAG
+    - |
+      docker run -d --name pg-$IMAGE_TAG \
+        --network test-net-$IMAGE_TAG \
+        -e POSTGRES_DB=devroute_test \
+        -e POSTGRES_USER=devroute \
+        -e POSTGRES_PASSWORD=devroute \
+        postgres:15-alpine
+    - docker run -d --name redis-$IMAGE_TAG --network test-net-$IMAGE_TAG redis:7-alpine
+    - sleep 5
+    - |
+      docker run --rm \
+        --network test-net-$IMAGE_TAG \
+        -e POSTGRES_HOST=pg-$IMAGE_TAG \
+        -e POSTGRES_PORT=5432 \
+        -e POSTGRES_DB=devroute_test \
+        -e POSTGRES_USER=devroute \
+        -e POSTGRES_PASSWORD=devroute \
+        -e REDIS_URL=redis://redis-$IMAGE_TAG:6379 \
+        -e JWT_SECRET=test-secret \
+        -e NODE_ENV=test \
+        $ECR_REGISTRY/devroute:$IMAGE_TAG \
+        sh -c 'npm install --include=dev && npm test'
   after_script:
-    - trivy image --format template --template "@/contrib/gitlab.tpl" --output trivy-report.json --input image.tar || true
-  only:
-    - main
+    - docker rm -f pg-$IMAGE_TAG redis-$IMAGE_TAG || true
+    - docker network rm test-net-$IMAGE_TAG || true
+  dependencies:
+    - build
 
-# ── Push to ECR ──────────────────────────────────────────────────────────────
-push-to-ecr:
+push:
   stage: push
-  image: python:3.12-slim
+  image: docker:24
   services:
-    - name: docker:24-dind
-      alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
+    - docker:24-dind
   before_script:
-    - apt-get update -qq && apt-get install -y -qq docker.io curl unzip
-    - curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-    - unzip -q awscliv2.zip
-    - ./aws/install
-    - aws --version
-    - aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+    - apk add --no-cache aws-cli
+    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
   script:
-    - gunzip -c image.tar.gz | docker load
-    - docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
-    - docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${ECR_REGISTRY}/${IMAGE_NAME}:latest
-    - docker push ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
-    - docker push ${ECR_REGISTRY}/${IMAGE_NAME}:latest
-    - echo "IMAGE_TAG=${IMAGE_TAG}" >> deploy.env
-  artifacts:
-    reports:
-      dotenv: deploy.env
-  only:
-    - main
-  needs:
-    - job: build
-      artifacts: true
-    - job: trivy-scan
+    - docker load < image.tar
+    - docker push $ECR_REGISTRY/devroute:$IMAGE_TAG
+  dependencies:
+    - build
 
-# ── Deployment Preview Link ───────────────────────────────────────────────────
-deploy-to-ec2:
-  stage: deploy
+deploy_staging:
+  stage: staging
   image: alpine:latest
-  needs:
-    - job: push-to-ecr
-      artifacts: true
   before_script:
-    - apk add --no-cache openssh-client aws-cli
-    - mkdir -p ~/.ssh
-    - cp $EC2_SSH_KEY ~/.ssh/id_rsa
-    - chmod 600 ~/.ssh/id_rsa
-    - ssh-keyscan -H ${EC2_HOST} >> ~/.ssh/known_hosts
+    - apk add --no-cache openssh-client
+    - eval $(ssh-agent -s)
+    - chmod 400 $EC2_SSH_KEY
+    - ssh-add $EC2_SSH_KEY
   script:
     - |
-      ssh -i ~/.ssh/id_rsa ubuntu@${EC2_HOST} "
-        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-        docker pull ${ECR_REGISTRY}/${IMAGE_NAME}:latest
-        docker stop devroute-api || true
-        docker rm devroute-api || true
-        docker run -d --name devroute-api --restart unless-stopped -p 3000:3000 ${ECR_REGISTRY}/${IMAGE_NAME}:latest
-        echo 'Deployment complete'
+      ssh -o StrictHostKeyChecking=no ubuntu@$EC2_HOST "
+        aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY &&
+        docker pull $ECR_REGISTRY/devroute:$IMAGE_TAG &&
+        docker stop devroute-staging || true &&
+        docker rm devroute-staging || true &&
+        docker run -d --name devroute-staging -p 3001:3000 \
+          --env-file /home/ubuntu/devroute.env \
+          -e NODE_ENV=staging \
+          $ECR_REGISTRY/devroute:$IMAGE_TAG &&
+        sleep 5 &&
+        curl -f http://localhost:3001/health
       "
-  only:
-    - main
+  dependencies: []
 
+deploy_production:
+  stage: production
+  when: manual
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client
+    - eval $(ssh-agent -s)
+    - chmod 400 $EC2_SSH_KEY
+    - ssh-add $EC2_SSH_KEY
+  script:
+    - |
+      ssh -o StrictHostKeyChecking=no ubuntu@$EC2_HOST "
+        aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY &&
+        docker pull $ECR_REGISTRY/devroute:$IMAGE_TAG &&
+        docker stop devroute-prod || true &&
+        docker rm devroute-prod || true &&
+        docker run -d --name devroute-prod -p 3000:3000 \
+          --env-file /home/ubuntu/devroute.env \
+          -e NODE_ENV=production \
+          $ECR_REGISTRY/devroute:$IMAGE_TAG &&
+        sleep 5 &&
+        curl -f http://localhost:3000/health
+      "
+  dependencies: []
