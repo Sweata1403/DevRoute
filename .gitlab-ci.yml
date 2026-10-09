@@ -6,6 +6,7 @@ stages:
   - production
 
 variables:
+  IMAGE_NAME: "devroute-api"
   IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
 
 build:
@@ -14,8 +15,8 @@ build:
   services:
     - docker:24-dind
   script:
-    - docker build -t $ECR_REGISTRY/devroute:$IMAGE_TAG ./services/api
-    - docker save $ECR_REGISTRY/devroute:$IMAGE_TAG > image.tar
+    - docker build -t $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG ./services/api
+    - docker save $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG > image.tar
   artifacts:
     paths:
       - image.tar
@@ -67,7 +68,7 @@ push:
     - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
   script:
     - docker load < image.tar
-    - docker push $ECR_REGISTRY/devroute:$IMAGE_TAG
+    - docker push $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
   dependencies:
     - build
 
@@ -83,13 +84,13 @@ deploy_staging:
     - |
       ssh -o StrictHostKeyChecking=no ubuntu@$EC2_HOST "
         aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY &&
-        docker pull $ECR_REGISTRY/devroute:$IMAGE_TAG &&
+        docker pull $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG &&
         docker stop devroute-staging || true &&
         docker rm devroute-staging || true &&
         docker run -d --name devroute-staging -p 3001:3000 \
           --env-file /home/ubuntu/devroute.env \
           -e NODE_ENV=staging \
-          $ECR_REGISTRY/devroute:$IMAGE_TAG &&
+          $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG &&
         sleep 5 &&
         curl -f http://localhost:3001/health
       "
@@ -108,15 +109,14 @@ deploy_production:
     - |
       ssh -o StrictHostKeyChecking=no ubuntu@$EC2_HOST "
         aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY &&
-        docker pull $ECR_REGISTRY/devroute:$IMAGE_TAG &&
+        docker pull $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG &&
         docker stop devroute-prod || true &&
         docker rm devroute-prod || true &&
         docker run -d --name devroute-prod -p 3000:3000 \
           --env-file /home/ubuntu/devroute.env \
           -e NODE_ENV=production \
-          $ECR_REGISTRY/devroute:$IMAGE_TAG &&
+          $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG &&
         sleep 5 &&
         curl -f http://localhost:3000/health
       "
   dependencies: []
-
