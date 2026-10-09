@@ -61,6 +61,7 @@ push:
   services:
     - docker:24-dind
   before_script:
+    - apk upgrade --no-cache
     - apk add --no-cache aws-cli
     - aws --version
     - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
