@@ -35,6 +35,9 @@ pipeline {
             steps {
                 script {
                     sh """
+                        docker build --target test -t ${IMAGE_NAME}-test:${IMAGE_TAG} \
+                            -f services/api/Dockerfile services/api/
+
                         docker network create test-net-${IMAGE_TAG} || true
 
                         docker run -d --name pg-${IMAGE_TAG} \
@@ -57,11 +60,11 @@ pipeline {
                             -e POSTGRES_DB=devroute_test \
                             -e POSTGRES_USER=devroute \
                             -e POSTGRES_PASSWORD=devroute \
-                            -e REDIS_URL=redis://redis-${IMAGE_TAG}:6379 \
+                            -e REDIS_HOST=redis-${IMAGE_TAG} \
+                            -e REDIS_PORT=6379 \
                             -e JWT_SECRET=devroute-test-jwt-secret \
                             -e NODE_ENV=test \
-                            ${IMAGE_NAME}:${IMAGE_TAG} \
-                            sh -c 'npm install --include=dev && npm test' || {
+                            ${IMAGE_NAME}-test:${IMAGE_TAG} || {
                                 docker rm -f pg-${IMAGE_TAG} redis-${IMAGE_TAG} || true
                                 docker network rm test-net-${IMAGE_TAG} || true
                                 exit 1
@@ -242,6 +245,7 @@ pipeline {
             sh """
                 docker rmi ${IMAGE_NAME}:${IMAGE_TAG}                        || true
                 docker rmi ${IMAGE_NAME}:latest                              || true
+                docker rmi ${IMAGE_NAME}-test:${IMAGE_TAG}                   || true
                 docker rmi ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}       || true
                 docker rmi ${ECR_REGISTRY}/${IMAGE_NAME}:latest              || true
             """

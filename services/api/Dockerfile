@@ -1,40 +1,28 @@
-# ── Stage 1: Install dependencies ────────────────────────────────
-# We use a separate stage so node_modules doesn't bloat the final image
+# Stage 1: production dependencies only, so the final image never carries jest or supertest
 FROM node:20-alpine AS deps
 RUN apk upgrade --no-cache
-
 WORKDIR /app
 COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Stage 2: test image, built only by CI, adds dev dependencies and the tests folder on top of deps
+FROM deps AS test
 RUN npm ci
-# npm ci = clean install (faster, deterministic, uses package-lock.json exactly)
-# --omit=dev = skip devDependencies (jest, nodemon etc — not needed in production)
-
-
-# ── Stage 2: Production image ─────────────────────────────────────
-FROM node:20-alpine AS production
-
-# Security: never run as root inside a container
-# Create a dedicated user with no special permissions
-RUN addgroup -S devroute && adduser -S devroute -G devroute
-
-WORKDIR /app
-
-# Copy only what we need from Stage 1 (not the full build environment)
-COPY --from=deps /app/node_modules ./node_modules
 COPY src/ ./src/
 COPY tests/ ./tests/
+CMD ["npm", "test"]
+
+# Stage 3: production image, the last stage, so a plain docker build uses it by default
+FROM node:20-alpine AS production
+RUN apk upgrade --no-cache
+RUN addgroup -S devroute && adduser -S devroute -G devroute
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY src/ ./src/
 COPY package.json ./
-
-# Give ownership to our non-root user
 RUN chown -R devroute:devroute /app
-
 USER devroute
-
 EXPOSE 3000
-
-# Health check — Docker uses this to know if the container is healthy
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget -qO- http://localhost:3000/health || exit 1
-
 CMD ["node", "src/index.js"]
-

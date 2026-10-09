@@ -27,7 +27,7 @@ test:
   services:
     - docker:24-dind
   script:
-    - docker load < image.tar
+    - docker build --target test -t devroute-test ./services/api
     - docker network create test-net-$IMAGE_TAG
     - |
       docker run -d --name pg-$IMAGE_TAG \
@@ -50,13 +50,10 @@ test:
         -e REDIS_PORT=6379 \
         -e JWT_SECRET=test-secret \
         -e NODE_ENV=test \
-        $ECR_REGISTRY/devroute:$IMAGE_TAG \
-        sh -c 'npm install --include=dev && npm test'
+        devroute-test
   after_script:
     - docker rm -f pg-$IMAGE_TAG redis-$IMAGE_TAG || true
     - docker network rm test-net-$IMAGE_TAG || true
-  dependencies:
-    - build
 
 push:
   stage: push
@@ -121,3 +118,4 @@ deploy_production:
         curl -f http://localhost:3000/health
       "
   dependencies: []
+
