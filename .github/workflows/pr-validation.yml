@@ -51,7 +51,6 @@ jobs:
           POSTGRES_PASSWORD: testpassword
           REDIS_HOST: localhost
           REDIS_PORT: 6379
-          REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-secret
           NODE_ENV: test
 
@@ -65,6 +64,5 @@ jobs:
           POSTGRES_PASSWORD: testpassword
           REDIS_HOST: localhost
           REDIS_PORT: 6379
-          REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-secret
           NODE_ENV: test

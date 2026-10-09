@@ -46,7 +46,8 @@ test:
         -e POSTGRES_DB=devroute_test \
         -e POSTGRES_USER=devroute \
         -e POSTGRES_PASSWORD=devroute \
-        -e REDIS_URL=redis://redis-$IMAGE_TAG:6379 \
+        -e REDIS_HOST=redis-$IMAGE_TAG \
+        -e REDIS_PORT=6379 \
         -e JWT_SECRET=test-secret \
         -e NODE_ENV=test \
         $ECR_REGISTRY/devroute:$IMAGE_TAG \
