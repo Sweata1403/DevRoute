@@ -63,13 +63,9 @@ push:
   services:
     - docker:24-dind
   before_script:
-    - apk add --no-cache curl unzip
-- cd /tmp && curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-- cd /tmp && unzip -q awscliv2.zip
-- cd /tmp && ./aws/install
-- export PATH=$PATH:/usr/local/bin
-- cd $CI_PROJECT_DIR
-- aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+    - apk add --no-cache aws-cli
+    - aws --version
+    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
   script:
     - docker load < image.tar
     - docker push $ECR_REGISTRY/devroute:$IMAGE_TAG
@@ -124,4 +120,3 @@ deploy_production:
         curl -f http://localhost:3000/health
       "
   dependencies: []
-
