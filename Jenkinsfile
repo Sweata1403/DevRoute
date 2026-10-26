@@ -101,7 +101,9 @@ pipeline {
             steps {
                 withCredentials([
                     string(credentialsId: 'AWS_ACCESS_KEY_ID',     variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+                    string(credentialsId: 'DEVROUTE_JWT_SECRET',   variable: 'JWT_SECRET'),
+                    string(credentialsId: 'DEVROUTE_DB_PASSWORD',  variable: 'POSTGRES_PASSWORD')
                 ]) {
                     sh '''
                         export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
@@ -123,12 +125,12 @@ pipeline {
                             --restart unless-stopped \
                             -p 3001:3000 \
                             -e NODE_ENV=staging \
-                            -e JWT_SECRET=devroute-prod-jwt-secret-2024 \
+                            -e JWT_SECRET="$JWT_SECRET" \
                             -e POSTGRES_HOST=172.17.0.1 \
                             -e POSTGRES_PORT=5432 \
                             -e POSTGRES_DB=devroute \
                             -e POSTGRES_USER=devroute \
-                            -e POSTGRES_PASSWORD=devroute \
+                            -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
                             -e REDIS_URL=redis://172.17.0.1:6379 \
                             -e REDIS_HOST=172.17.0.1 \
                             131540502908.dkr.ecr.us-east-1.amazonaws.com/devroute-api:$IMAGE_TAG
@@ -161,7 +163,9 @@ pipeline {
             steps {
                 withCredentials([
                     string(credentialsId: 'AWS_ACCESS_KEY_ID',     variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+                    string(credentialsId: 'DEVROUTE_JWT_SECRET',   variable: 'JWT_SECRET'),
+                    string(credentialsId: 'DEVROUTE_DB_PASSWORD',  variable: 'POSTGRES_PASSWORD')
                 ]) {
                     sh '''
                         export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
@@ -186,14 +190,14 @@ pipeline {
                             --restart unless-stopped \
                             -p 3000:3000 \
                             -e NODE_ENV=production \
-                            -e JWT_SECRET=devroute-prod-jwt-secret-2024 \
+                            -e JWT_SECRET="$JWT_SECRET" \
                             -e POSTGRES_SSL=false \
                             -e POSTGRES_HOST=172.17.0.1 \
                             -e REDIS_HOST=172.17.0.1 \
                             -e POSTGRES_PORT=5432 \
                             -e POSTGRES_DB=devroute \
                             -e POSTGRES_USER=devroute \
-                            -e POSTGRES_PASSWORD=devroute \
+                            -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
                             -e REDIS_URL=redis://172.17.0.1:6379 \
                             --label image-tag=$IMAGE_TAG \
                             131540502908.dkr.ecr.us-east-1.amazonaws.com/devroute-api:$IMAGE_TAG
@@ -210,14 +214,14 @@ pipeline {
                                     --restart unless-stopped \
                                     -p 3000:3000 \
                                     -e NODE_ENV=production \
-                                    -e JWT_SECRET=devroute-prod-jwt-secret-2024 \
+                                    -e JWT_SECRET="$JWT_SECRET" \
                                     -e POSTGRES_SSL=false \
                                     -e POSTGRES_HOST=172.17.0.1 \
                                     -e REDIS_HOST=172.17.0.1 \
                                     -e POSTGRES_PORT=5432 \
                                     -e POSTGRES_DB=devroute \
                                     -e POSTGRES_USER=devroute \
-                                    -e POSTGRES_PASSWORD=devroute \
+                                    -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
                                     -e REDIS_URL=redis://172.17.0.1:6379 \
                                     --label image-tag=$PREV_TAG \
                                     131540502908.dkr.ecr.us-east-1.amazonaws.com/devroute-api:$PREV_TAG
